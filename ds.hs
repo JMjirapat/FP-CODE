@@ -44,3 +44,5 @@ dequeue (x:xs) = (Just x, xs)
 searchQueue :: (Eq a) => a -> Queue a -> Maybe a
 searchQueue _ [] = Nothing
 searchQueue x (y:ys) = if x == y then Just y else searchQueue x ys
+
+-- Binary Tree, AVL Treem, Doubly LinkListed
