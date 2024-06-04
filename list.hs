@@ -234,38 +234,172 @@ foldl' f acc l = foldr (flip f) acc l
 
 foldr' f acc l = foldl (flip f) acc (rev l) 
 
-data Month = January | February | March | April | May | June | July | August | September | October | November | December deriving (Show)
+data Month = January | February | March | April | May | June | July | August | September | October | November | December deriving (Show, Eq, Enum)
 
-daysInMonth m = case m of
-  January -> 31
-  February -> 28
-  March -> 31
-  April -> 30
-  May -> 31
-  June -> 30
-  July -> 31
-  August -> 31
-  September -> 30
-  October -> 31
-  November -> 30
-  December -> 31
+daysInMonth :: [Integer]
+daysInMonth = [31,28,31,30,31,30,31,31,30,31,30,31]
 
-nextMonth :: Month -> Month
-nextMonth m = case m of
-  January -> February
-  February -> March
-  March -> April
-  April -> May
-  May -> June
-  June -> July
-  July -> August
-  August -> September
-  September -> October
-  October -> November
-  November -> December
-  December -> January
+nextMonth :: [Month]
+nextMonth = [February .. December] ++ [January]
+
+ansForMonth :: Month -> [a] -> a
+-- ansForMonth m ans = snd . head . filter' (\x -> (fst x) == m) . zipWith (,) [January .. December] ans
+ansForMonth m = snd . head . filter' (((== m) . fst)) . zip [January .. December]
 
 nextDay :: Integer -> Month -> (Integer,Month)
 nextDay d m
-  | (d `mod` daysInMonth m) == 0 = (1,nextMonth m)
+  | d == ansForMonth m daysInMonth = (1,ansForMonth m nextMonth)
   | otherwise = (d+1,m)
+
+data Tree a = Empty | Node (Tree a) a (Tree a) deriving (Show)
+
+preorder :: Tree a -> [a]
+preorder Empty = []
+preorder (Node l v r) = [v] ++ preorder l ++ preorder r
+
+inorder :: Tree a -> [a]
+inorder Empty = []
+inorder (Node l v r) = inorder l ++ [v] ++ inorder r
+
+postorder :: Tree a -> [a]
+postorder Empty = []
+postorder (Node l v r) = postorder l ++ postorder r ++ [v]
+
+map_tree :: (a -> b) -> Tree a -> Tree b
+map_tree _ Empty = Empty
+map_tree f (Node l v r) = Node (map_tree f l) (f v) (map_tree f r)
+
+fold_tree_preorder :: (a -> b -> b) -> b -> Tree a -> b
+fold_tree_preorder _ res Empty = res
+fold_tree_preorder f res t = foldr f res $ preorder t
+
+fold_tree_inorder :: (a -> b -> b) -> b -> Tree a -> b
+fold_tree_inorder _ res Empty = res
+fold_tree_inorder f res t = foldr f res $ inorder t
+
+fold_tree_postorder :: (a -> b -> b) -> b -> Tree a -> b
+fold_tree_postorder _ res Empty = res
+fold_tree_postorder f res t = foldr f res $ postorder t
+
+treeFold :: (a -> b -> b -> b) -> b -> Tree a -> b
+treeFold _ res Empty = res
+treeFold f res (Node l v r) =
+  let acc = treeFold f res l
+      acc' = treeFold f acc r
+  in f v acc acc'
+
+preorder' :: Tree a -> [a]
+preorder' t = treeFold (\v acc acc' -> [v] ++ acc ++ acc') [] t
+
+inorder' :: Tree a -> [a]
+inorder' t = treeFold (\v acc acc' -> acc ++ [v] ++ acc') [] t
+
+postorder' :: Tree a -> [a]
+postorder' t = treeFold (\v acc acc' -> acc ++ acc' ++ [v]) [] t
+
+height_tree :: Tree a -> Integer
+height_tree Empty = 0
+height_tree (Node l _ r) = 1 + max (height_tree l) (height_tree r)
+
+data NAryTree a = NAryEmpty | NAryNode a [NAryTree a]
+
+nary_tree_preorder :: NAryTree a -> [a] 
+nary_tree_preorder NAryEmpty = []
+-- nary_tree_preorder (NAryNode v []) = [v]
+nary_tree_preorder (NAryNode v xs) = [v] ++ (concat $ map nary_tree_preorder xs)
+
+nary_tree_postorder :: NAryTree a -> [a] 
+nary_tree_postorder NAryEmpty = []
+-- nary_tree_postorder (NAryNode v []) = [v]
+nary_tree_postorder (NAryNode v xs) = (concat $ map nary_tree_postorder xs) ++ [v]
+
+isBST :: Ord a => Tree a -> Bool
+isBST Empty = True
+isBST (Node Empty _ Empty) = True
+isBST (Node Empty v (Node rl rv rr)) = v <= rv && isBST (Node rl rv rr)
+isBST (Node (Node ll lv lr) v Empty) = v > lv && isBST (Node ll lv lr)
+isBST (Node (Node ll lv lr) v (Node rl rv rr)) = v <= rv && v > lv && isBST (Node rl rv rr) && isBST (Node ll lv lr)
+
+class IfValue a where
+  boolVal :: a -> Bool
+
+instance IfValue Int where
+  boolVal 0 = False
+  boolVal _ = True
+
+instance IfValue [a] where
+  boolVal [] = False
+  boolVal _ = True
+
+instance IfValue (Tree a) where
+  boolVal Empty = False
+  boolVal _ = True
+
+instance (IfValue a, IfValue b) => IfValue (a,b) where
+  boolVal (a,b) = boolVal a && boolVal b
+
+mapMaybe :: (a->b) -> Maybe a -> Maybe b
+mapMaybe _ Nothing = Nothing
+mapMaybe f (Just v) = Just $ f v
+
+mapPair_fst :: (a->b) -> (a,c) -> (b,c)
+mapPair_fst f (a,b) = (f a, b)
+
+mapPair_snd :: (c->b) -> (a,c) -> (a,b)
+mapPair_snd f (a,b) = (a,f b)
+
+data COp a = CVal Int a deriving (Show)
+
+instance Functor COp where
+  fmap f (CVal i a) = CVal (i+1) (f a)
+
+maybeAp :: Maybe (a -> b) -> Maybe a -> Maybe b
+maybeAp Nothing _ = Nothing
+maybeAp _ Nothing = Nothing
+maybeAp (Just f) (Just v) = Just $ f v
+
+initMaybe :: a -> Maybe a
+initMaybe = Just
+
+listAp :: [a -> b] -> [a] -> [b]
+listAp [] _ = []
+listAp _ [] = []
+listAp fs vs = [f v | f <- fs, v <- vs]
+
+initList :: a -> [a]
+initList = (:[])
+
+newtype BoolAnd = BoolAnd { getBoolAnd :: Bool }
+  deriving (Show)
+instance Semigroup (BoolAnd) where
+  (BoolAnd a) <> (BoolAnd b) = BoolAnd (a && b)
+instance Monoid (BoolAnd) where
+  mempty = BoolAnd True
+
+newtype BoolOr = BoolOr { getBoolOr :: Bool }
+  deriving (Show)
+instance Semigroup (BoolOr) where
+  (BoolOr a) <> (BoolOr b) = BoolOr (a || b)
+instance Monoid (BoolOr) where
+  mempty = BoolOr False
+
+maybeBind :: Maybe a -> (a -> Maybe b) -> Maybe b
+maybeBind Nothing _ = Nothing
+maybeBind (Just v) f = f v
+
+listBind :: [a] -> (a -> [b]) -> [b]
+listBind [] _ = []
+listBind xs f = concat $ map f xs
+
+eitherBind :: Either a b -> (b -> Either a c) -> Either a c
+eitherBind (Left a) _ = Left a
+eitherBind (Right b) f = f b
+
+arrowBind :: (r->a) -> (a -> (r->b)) -> (r->b)
+arrowBind f g = \x -> g (f x) x
+
+pairBind :: Semigroup r => (r,a) -> (a -> (r,b)) -> (r,b)
+pairBind (r1,a) f = (r1 <> r2,b)
+  where (r2,b) = f a
+
+nameTag = getLine >>= return
